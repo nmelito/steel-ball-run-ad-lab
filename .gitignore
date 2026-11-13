@@ -1,0 +1,12 @@
+# Local attack artifacts - never commit loot
+*.hash
+*.zip
+nmap/
+loot/
+*.kirbi
+*.ccache
+
+# OS / editor
+Thumbs.db
+.DS_Store
+.vscode/
