@@ -13,8 +13,10 @@ This guide builds the `steelballrun.local` lab from scratch. Budget about **60â€
 ### Images
 | Image | Where to get it |
 |-------|-----------------|
-| Windows Server 2022 Evaluation (ISO) | Microsoft Evaluation Center (free, 180 days) |
-| Kali Linux (VM image or ISO) | kali.org |
+| Windows Server 2022 Evaluation (ISO) | [Microsoft Evaluation Center: Windows Server 2022](https://www.microsoft.com/en-us/evalcenter/download-windows-server-2022) (free, 180 days; choose **ISO downloads â†’ 64-bit edition**) |
+| Kali Linux (VM image or ISO) | [kali.org/get-kali](https://www.kali.org/get-kali/) (the pre-built **Virtual Machines** images are quickest) |
+
+> One Windows Server ISO is enough. Install it three times, choosing **Windows Server 2022 Standard Evaluation (Desktop Experience)** each time.
 
 ### VM sizing
 

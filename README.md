@@ -74,7 +74,7 @@ steel-ball-run-ad-lab/
 
 ## Quick Start
 
-1. Create three Windows Server 2022 VMs and one Kali VM on the same host-only network.
+1. Create three Windows Server 2022 VMs ([free evaluation ISO](https://www.microsoft.com/en-us/evalcenter/download-windows-server-2022)) and one [Kali](https://www.kali.org/get-kali/) VM on the same host-only network.
 2. Copy the `scripts/` folder to `C:\LabSetup` on each Windows VM.
 3. Run the scripts in order:
 
