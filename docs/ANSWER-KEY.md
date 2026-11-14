@@ -43,7 +43,7 @@ flowchart TD
 | `SBR\svc_tusk` | `valkyrie` | Kerberoast + rockyou | MS02 foothold |
 | `SBR\d.brando` | `Sc4ryM0nst3rs!` | `C:\RaceOps\Sync-Riders.ps1` on MS02 | ACL path to DA |
 | `SBR\p.loco` | `Lucky#Horseshoe#1890!` | AS-REP roastable, **won't crack** | Red herring |
-| `SBR\svc_sql` | `Mssql!Svc#Philly-1890-Rac3` | Kerberoastable, **won't crack** | Red herring |
+| `SBR\svc_sql` | `Philly#Ledger-1890-Rac3!` | Kerberoastable, **won't crack** | Red herring |
 | `SBR\w.kepipo` | `Naples1890!` | In AD description, **account disabled** | Red herring |
 | `SBR\f.valentine` | `D1rtyD33dsD0neDirtCheap!` | Not intended to be recovered (DA) | Flavor |
 

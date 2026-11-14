@@ -30,7 +30,7 @@
         'svc_tusk'    = 'valkyrie'                   # Kerberoastable, in rockyou.txt
         'd.brando'    = 'Sc4ryM0nst3rs!'             # Hard-coded in admin script on MS02
         'p.loco'      = 'Lucky#Horseshoe#1890!'      # AS-REP roastable red herring (uncrackable)
-        'svc_sql'     = 'Mssql!Svc#Philly-1890-Rac3' # Kerberoastable red herring (uncrackable)
+        'svc_sql'     = 'Philly#Ledger-1890-Rac3!'   # Kerberoastable red herring (uncrackable; must not contain 'svc'/'sql' - complexity rule)
         'w.kepipo'    = 'Naples1890!'                # Disabled account, password in description
     }
 }

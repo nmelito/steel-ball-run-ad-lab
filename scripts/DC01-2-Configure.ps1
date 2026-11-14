@@ -73,7 +73,8 @@ function Set-LabUser {
         [string]$Password, [string]$Description = '', [string]$Title = '',
         [string[]]$Groups = @(), [switch]$Disabled
     )
-    if (-not $Password) { $Password = New-RandomPassword }
+    $generated = -not $Password
+    if ($generated) { $Password = New-RandomPassword }
     $display = ("$Given $Surname").Trim()
     $user = Get-ADUser -Filter "SamAccountName -eq '$Sam'"
     if (-not $user) {
@@ -91,7 +92,20 @@ function Set-LabUser {
     if ($Title)       { $setParams.Title = $Title }
     Set-ADUser @setParams
     foreach ($g in $Groups) { Add-ADGroupMember -Identity $g -Members $Sam -ErrorAction SilentlyContinue }
-    Set-ADAccountPassword -Identity $Sam -Reset -NewPassword (ConvertTo-SecureString $Password -AsPlainText -Force)
+    # Complexity rejects passwords containing any 3+ char token of the display name
+    # (split on spaces, '_', '.', '-', etc.). Random passwords can rarely hit that, so retry.
+    for ($attempt = 1; ; $attempt++) {
+        try {
+            Set-ADAccountPassword -Identity $Sam -Reset -NewPassword (ConvertTo-SecureString $Password -AsPlainText -Force)
+            break
+        } catch [Microsoft.ActiveDirectory.Management.ADPasswordComplexityException] {
+            if (-not $generated -or $attempt -ge 5) {
+                throw "Password for '$Sam' rejected by domain policy. Fixed passwords in LabConfig.psd1 must be 7+ chars, " +
+                      "use 3 of 4 character classes, and must not contain the username or any 3+ char part of the display name ('$display'). $_"
+            }
+            $Password = New-RandomPassword
+        }
+    }
     if ($Disabled) { Disable-ADAccount -Identity $Sam } else { Enable-ADAccount -Identity $Sam }
 }
 
