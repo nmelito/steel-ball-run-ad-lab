@@ -152,7 +152,7 @@ nxc smb 192.168.56.10-12
 
 Expected:
 - `.10` shows 53/88/389/445 (DC).
-- `.11` shows 80/445/3389.
+- `.11` shows 80/445/3389/5985.
 - `.12` shows 445/3389/5985.
 - `nxc` reports the domain `steelballrun.local` and the three hostnames.
 

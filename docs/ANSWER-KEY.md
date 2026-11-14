@@ -58,7 +58,7 @@ nmap -Pn -sC -sV -p- --min-rate 2000 192.168.56.10-12 -oA nmap/all
 
 Findings:
 - **.10 PHILADELPHIA:** 53, 88, 135, 389, 445, 464, 636, 3268, 5985 … a Domain Controller for `steelballrun.local`.
-- **.11 SANDIEGO:** **80 (IIS 10, "Steel Ball Run – Official Race Office")**, 445, 3389.
+- **.11 SANDIEGO:** **80 (IIS 10, "Steel Ball Run – Official Race Office")**, 445, 3389, 5985 (WinRM: open, but no credentials work here yet).
 - **.12 MONUMENTVALLEY:** 445, 3389, 5985.
 
 ```bash
