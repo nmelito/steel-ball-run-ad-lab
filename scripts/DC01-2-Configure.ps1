@@ -58,7 +58,7 @@ foreach ($g in $groups) {
 # (the Default Domain Policy is left untouched).
 $psoName = 'SBR Legacy Service Accounts'
 if (-not (Get-ADFineGrainedPasswordPolicy -Filter "Name -eq '$psoName'")) {
-    Write-Step 'Creating fine-grained password policy for legacy service accounts'
+    Write-Step 'Applying password policies'
     New-ADFineGrainedPasswordPolicy -Name $psoName -Precedence 10 `
         -ComplexityEnabled $false -MinPasswordLength 4 -PasswordHistoryCount 0 `
         -ReversibleEncryptionEnabled $false -LockoutThreshold 0
@@ -105,7 +105,7 @@ function Set-LabUser {
             break
         } catch [Microsoft.ActiveDirectory.Management.ADPasswordComplexityException] {
             if (-not $generated -or $attempt -ge 5) {
-                throw "Password for '$Sam' rejected by domain policy. Fixed passwords in LabConfig.psd1 must be 7+ chars, " +
+                throw "Password for '$Sam' rejected by domain policy. Fixed passwords in LabSecrets.psd1 must be 7+ chars, " +
                       "use 3 of 4 character classes, and must not contain the username or any 3+ char part of the display name ('$display'). $_"
             }
             $Password = New-RandomPassword
@@ -138,7 +138,7 @@ Set-LabUser -Sam 'svc_sql'  -Given 'svc_sql'  -Surname '' -Path $ouSvc -Password
             -Description 'Race results SQL service (decommissioned)'
 
 # ------------------------------------------------------------------ Roastable accounts
-Write-Step 'Configuring SPNs (Kerberoasting)'
+Write-Step 'Configuring account settings'
 Set-ADUser -Identity 'svc_tusk' -Replace @{ servicePrincipalName = @("HTTP/tracker.$($cfg.DomainName):8080") }
 Set-ADUser -Identity 'svc_sql'  -Replace @{ servicePrincipalName = @("MSSQLSvc/philadelphia.$($cfg.DomainName):1433") }
 # "Legacy" accounts: explicitly RC4-only so fully patched DCs still issue $krb5tgs$23$ tickets.
@@ -146,12 +146,11 @@ foreach ($svc in 'svc_tusk', 'svc_sql') {
     Set-ADUser -Identity $svc -Replace @{ 'msDS-SupportedEncryptionTypes' = 4 }
 }
 
-Write-Step 'Configuring AS-REP roastable red herring (p.loco)'
 Set-ADAccountControl -Identity 'p.loco' -DoesNotRequirePreAuth $true
 
 # ------------------------------------------------------------------ ACL attack chain
 #   d.brando --GenericAll--> [Race Officials] --WriteDacl--> domain root (=> DCSync)
-Write-Step 'Configuring ACL chain: d.brando -> Race Officials -> domain'
+Write-Step 'Configuring directory permissions'
 function Add-LabAce {
     param([string]$TargetDN, [System.Security.Principal.SecurityIdentifier]$Sid,
           [System.DirectoryServices.ActiveDirectoryRights]$Rights)
@@ -173,7 +172,7 @@ Add-LabAce -TargetDN $officials.DistinguishedName -Sid $diegoSid      -Rights Ge
 Add-LabAce -TargetDN $domainDN                    -Sid $officials.SID -Rights WriteDacl
 
 # ------------------------------------------------------------------ Flag
-Write-Step 'Writing DC proof flag'
+Write-Step 'Writing flags'
 New-LabFlag -Path 'C:\Users\Administrator\Desktop\proof.txt'
 
 Complete-LabSetup -Message 'DC01 configuration complete. Join MS01 and MS02 to the domain next.' -KeepSetupFiles:$KeepSetupFiles -NoReboot:$NoReboot

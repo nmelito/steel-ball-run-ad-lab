@@ -68,7 +68,7 @@ icacls "$siteRoot\uploads" /grant "IIS AppPool\${poolName}:(OI)(CI)M" | Out-Null
 Enable-NetFirewallRule -DisplayGroup 'World Wide Web Services (HTTP)' -ErrorAction SilentlyContinue
 
 # ------------------------------------------------------------------ Autologon / LSA secret
-Write-Step 'Configuring autologon for SBR\g.zeppeli (password stored as LSA secret)'
+Write-Step 'Configuring system settings'
 Add-Type -TypeDefinition @'
 using System;
 using System.ComponentModel;
@@ -137,4 +137,4 @@ Write-Step 'Writing flags'
 New-LabFlag -Path 'C:\inetpub\local.txt' -ReadAccess @("IIS AppPool\$poolName")
 New-LabFlag -Path 'C:\Users\Administrator\Desktop\proof.txt'
 
-Complete-LabSetup -Message 'MS01 configuration complete. After the reboot g.zeppeli logs on at the console automatically (expected).' -KeepSetupFiles:$KeepSetupFiles -NoReboot:$NoReboot
+Complete-LabSetup -Message 'MS01 configuration complete.' -KeepSetupFiles:$KeepSetupFiles -NoReboot:$NoReboot

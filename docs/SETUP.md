@@ -2,6 +2,27 @@
 
 This guide builds the `steelballrun.local` lab from scratch. Budget about **60–90 minutes**, most of it spent on Windows installs and reboots.
 
+> [!NOTE]
+> **This guide is spoiler-free.** You can build the lab and still play it blind. The setup scripts print only generic progress messages, and nothing here describes the vulnerabilities.
+
+---
+
+## 0. Honor system: what not to open
+
+This lab is meant for self-training, so it runs on the honor system. If you plan to play it, **don't open these**:
+
+| File / location | Why |
+|-----------------|-----|
+| `scripts/LabSecrets.psd1` | Every account password and what each account is for |
+| `scripts/*.ps1` and `scripts/web/` source | The scripts configure the vulnerabilities, so reading them reveals the path |
+| `C:\LabSetup` on any VM (only present if you used `-KeepSetupFiles`) | A copy of all of the above |
+| [`docs/ANSWER-KEY.md`](ANSWER-KEY.md) | The full walkthrough |
+| [`docs/HINTS.md`](HINTS.md) | Fine to open, one hint at a time, when you're stuck |
+
+The **only** file you might need to edit is `scripts/LabConfig.psd1`, and only for network settings. It's spoiler-free.
+
+If your enumeration in the lab ever turns up `C:\LabSetup` or a `LabSecrets.psd1`, it's leftover setup material and not part of the challenge. Ignore it. Cheating only cheats you out of the practice.
+
 ---
 
 ## 1. Requirements
@@ -30,7 +51,7 @@ This guide builds the `steelballrun.local` lab from scratch. Budget about **60�
 > [!IMPORTANT]
 > Install each Windows VM **from the ISO separately**. If you clone VMs, run `sysprep /generalize /oobe /shutdown` on the clone first, or duplicate machine SIDs will cause domain-join problems.
 >
-> Give each server's **local Administrator a different password**. If they share one, players can pass-the-hash straight from MS01 to MS02 and skip the intended path.
+> Give each server's **local Administrator a different password**. If they share one, a single dumped hash unlocks every server and the lab plays very differently from what was designed.
 
 ---
 
@@ -51,24 +72,27 @@ sudo nmcli con mod "Wired connection 1" ipv4.method manual ipv4.addresses 192.16
 sudo nmcli con up "Wired connection 1"
 ```
 
-**Different subnet?** Edit `scripts/LabConfig.psd1` (the `Nodes` IPs and `PrefixLength`) before running anything.
+**Different subnet?** Edit `scripts/LabConfig.psd1` (the `Nodes` IPs and `PrefixLength`) before running anything. This file is spoiler-free.
 
 **More than one NIC on a Windows VM?** For example, a NAT adapter for updates plus the host-only one. Set `InterfaceAlias` in `LabConfig.psd1` to the host-only adapter's name (`Get-NetAdapter` shows it). Otherwise the scripts refuse to guess.
 
 > [!TIP]
-> Do Windows Updates **before** moving the VMs to the isolated network, if you want them. The setup scripts themselves need no internet access: IIS, ASP.NET and AD DS install from the Server image.
+> Do Windows Updates **before** moving the VMs to the isolated network, if you want them. The setup scripts themselves need no internet access: every Windows feature they install comes from the Server image.
 
 ---
 
 ## 3. Get the scripts onto the VMs
 
-On each Windows VM, copy the repo's `scripts\` folder to **`C:\LabSetup`**. You can use a shared folder, an ISO, or paste the files into a VM console. Then, in an **elevated** PowerShell:
+On each Windows VM, copy the **whole** `scripts\` folder to **`C:\LabSetup`**. You can use a hypervisor shared folder, an ISO, or a USB/clipboard copy. Don't open the files on the way. Then, in an **elevated** PowerShell:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass -Force
 cd C:\LabSetup
 Get-ChildItem -Recurse | Unblock-File
 ```
+
+> [!TIP]
+> Running from a **hypervisor shared folder** or an attached ISO works too. Disconnect it before you snapshot, so nothing on the VM still holds the scripts.
 
 ---
 
@@ -90,7 +114,10 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 .\DC01-2-Configure.ps1
 ```
 
-This creates the OUs, groups, users, SPNs, the ACL chain, the red herrings and `proof.txt`. It then **deletes `C:\LabSetup` and reboots** (see the note in §6 about `-KeepSetupFiles`).
+This populates the domain and writes the DC's flag. It then **deletes `C:\LabSetup` and reboots**; see [Automatic cleanup](#automatic-cleanup).
+
+> [!IMPORTANT]
+> Give `SBR\Administrator` a **strong, unique password** that isn't in any wordlist. See [Credential hygiene](#credential-hygiene).
 
 ---
 
@@ -122,7 +149,6 @@ After the reboot, log in as the **local** Administrator, not the domain one. At 
 cd C:\LabSetup; Set-ExecutionPolicy -Scope Process Bypass -Force
 .\MS01-2-Configure.ps1
 ```
-This deploys the IIS race site and configures autologon for `SBR\g.zeppeli`. After the reboot, Gyro logs on at the console automatically. That is expected, and it's part of the lab.
 
 **MS02 (`MONUMENTVALLEY`):**
 
@@ -130,13 +156,22 @@ This deploys the IIS race site and configures autologon for `SBR\g.zeppeli`. Aft
 cd C:\LabSetup; Set-ExecutionPolicy -Scope Process Bypass -Force
 .\MS02-2-Configure.ps1
 ```
-This creates the `CorpseTracker` service, grants WinRM access, creates `C:\RaceOps` and writes the flags.
 
-**Automatic cleanup.** Each `*-2-Configure.ps1` script finishes by **deleting `C:\LabSetup`**, which holds every password, and then **rebooting**, which clears any setup-time credentials from memory. You don't need to delete anything by hand. If something has a file in the folder open, the deletion is scheduled to run as SYSTEM at the next boot instead.
+Each script sets up that server's part of the lab and writes its flags.
+
+> **Expected behavior:** after its final reboot, **MS01's console signs in to a user session on its own**. That's part of the lab. Leave it alone; don't sign it out or log on over it.
+
+### Automatic cleanup
+
+Each `*-2-Configure.ps1` script finishes by:
+1. **deleting `C:\LabSetup`**, because it holds the lab's solution. If something has a file in it open, the deletion is scheduled to run as SYSTEM at the next boot instead.
+2. **rebooting**, which clears any setup-time credentials from memory.
+
+You don't need to delete anything by hand. Optional switches:
 
 | Switch | Use it when |
 |--------|-------------|
-| `-KeepSetupFiles` | You're still testing and want to re-run scripts. Run once more without it, or delete the folder as `.\Administrator`, before you play. |
+| `-KeepSetupFiles` | You're still testing and want to re-run scripts. Run once more without it, or delete the folder as `.\Administrator`, before you play. Until then, the [honor system](#0-honor-system-what-not-to-open) applies. |
 | `-NoReboot` | You want to reboot yourself later. Do reboot before you snapshot. |
 | `-AllowDomainAccount` | (MS01/MS02 only) Not recommended. It overrides the local-admin check. |
 
@@ -147,7 +182,7 @@ This creates the `CorpseTracker` service, grants WinRM access, creates `C:\RaceO
 ## 7. Verify from Kali
 
 ```bash
-# Every host is up with the expected ports
+# Every host is up
 nmap -Pn -p 53,80,88,135,389,445,3389,5985 192.168.56.10-12
 
 # Website is live on MS01
@@ -163,37 +198,38 @@ Expected:
 - `.12` shows 445/3389/5985.
 - `nxc` reports the domain `steelballrun.local` and the three hostnames.
 
-**Kerberos clock sync.** Kerberos attacks fail with `KRB_AP_ERR_SKEW` if Kali's clock is more than 5 minutes off the DC:
+**Clock sync.** Kerberos fails with `KRB_AP_ERR_SKEW` if Kali's clock is more than 5 minutes off the DC:
 
 ```bash
 sudo ntpdate -u 192.168.56.10      # or: sudo rdate -n 192.168.56.10
 ```
 
-**Optional wordlist sanity check.** The intended crack relies on `rockyou.txt`:
+**Wordlists.** Make sure Kali's standard wordlists are unpacked:
 
 ```bash
-grep -cx valkyrie /usr/share/wordlists/rockyou.txt   # should print 1 (or more)
+sudo gunzip -k /usr/share/wordlists/rockyou.txt.gz 2>/dev/null; ls -lh /usr/share/wordlists/rockyou.txt
 ```
 
 ---
 
 ## 8. Clean up & snapshot
 
-1. Check that `C:\LabSetup` is gone on every Windows VM. The configure scripts delete it unless you used `-KeepSetupFiles`. If it's still there, delete it as **`.\Administrator`** on member servers. Never use a domain account for this; see below.
+1. Check that `C:\LabSetup` is gone on every Windows VM. The configure scripts delete it unless you used `-KeepSetupFiles`. If it's still there, delete it as **`.\Administrator`** on member servers. **Never** elevate with a domain account to do this; see below.
    ```powershell
    Remove-Item C:\LabSetup -Recurse -Force
    ```
-2. **Don't log on to MS01/MS02 again** after their final reboot. MS01 shows Gyro's autologon desktop; leave it.
-3. Shut the VMs down and take a snapshot named **`clean`** of each one.
-4. Revert to `clean` whenever you want a fresh attempt. Reverting the DC and members **together** keeps machine-account passwords in sync.
+2. Disconnect any shared folder or ISO you used to copy the scripts.
+3. **Don't log on to MS01/MS02 again** after their final reboot. MS01's console session is expected; leave it.
+4. Shut the VMs down and take a snapshot named **`clean`** of each one.
+5. Revert to `clean` whenever you want a fresh attempt. Reverting the DC and members **together** keeps machine-account passwords in sync.
 
 ### Credential hygiene
 
-Players get SYSTEM on both member servers, and anything Windows remembers there is theirs. A domain admin logon or elevation on MS01/MS02 leaves two traces:
+Assume players will eventually have full control of the member servers, and that anything Windows remembers there is theirs. A **domain admin** logon or elevation on MS01/MS02 leaves two traces behind:
 
-| What | Where | How long | What players get |
-|------|-------|----------|------------------|
-| NT hash (and Kerberos tickets) | LSASS memory | Until reboot | Instant Domain Admin through pass-the-hash, skipping MS02 and the ACL chain |
+| What | Where | How long | Effect on the lab |
+|------|-------|----------|-------------------|
+| NT hash (and Kerberos tickets) | LSASS memory | Until reboot | Instant Domain Admin through pass-the-hash, skipping most of the lab |
 | Cached logon (DCC2 / mscache) | `HKLM\SECURITY\Cache` | **Permanent**, survives reboots | Offline cracking of the DA password, if it's weak |
 
 Domain admin logons include all of these: logging on as `SBR\Administrator`, typing DA credentials into a **UAC prompt**, `runas`, RDP, or mapping a drive with DA credentials.
@@ -203,11 +239,11 @@ Domain admin logons include all of these: logging on as `SBR\Administrator`, typ
 - The only place domain admin credentials touch a member is the `Get-Credential` prompt in `Member-1-JoinDomain.ps1`. That's a network authentication for the join, not a logon, and the server reboots right after.
 - Give `SBR\Administrator` a **strong, unique password** that isn't in any wordlist, so a leaked cached hash can't be cracked.
 
-**Already leaked a domain admin logon on a member?** Check from Kali once you have SYSTEM: `secretsdump` shows `Dumping cached domain logon information` with an `SBR/Administrator` entry. Then do either of these:
-- **Easiest:** revert to a snapshot from before the logon, or rebuild that member.
+**Already used a domain admin account on a member?** Do either of these:
+- **Easiest:** revert that member to a snapshot from before the logon, or rebuild it.
 - **In place:**
-  1. Change the `SBR\Administrator` password on the DC to a strong new one, which makes the leaked hash and cached entry useless.
-  2. Reboot the member to flush LSASS.
+  1. Change the `SBR\Administrator` password on the DC to a strong new one, which makes any leaked hash or cached entry useless.
+  2. Reboot the member to flush memory.
   3. Then take your `clean` snapshot.
 
 > Evaluation editions run for 180 days. Running `slmgr /rearm` resets the timer a few times. Reverting snapshots also restores the clock-based activation state.
@@ -219,9 +255,12 @@ Domain admin logons include all of these: logging on as `SBR\Administrator`, typ
 | Symptom | Fix |
 |---------|-----|
 | `Found N active adapters` | Set `InterfaceAlias` in `LabConfig.psd1`. |
+| `LabConfig.psd1` / `LabSecrets.psd1 not found` | Copy the **whole** `scripts\` folder, not individual files. |
 | Domain join: "domain could not be contacted" | Check that the member's DNS is `192.168.56.10` and that `Resolve-DnsName steelballrun.local` works. The DC firewall must allow DNS (it does by default). |
-| `Cannot resolve SBR\svc_tusk` on MS02 | Run `DC01-2-Configure.ps1` on the DC first. |
-| Website returns 500 / compilation error | Make sure `Web-Asp-Net45` installed: `Get-WindowsFeature Web-Asp-Net45`. |
+| `A required domain account was not found` on MS02 | Run `DC01-2-Configure.ps1` on the DC first. |
+| `You are running as a DOMAIN account` | Sign out, log on as `.\Administrator` (local) and run the script again. |
+| `Password for '...' rejected by domain policy` | Only happens if `LabSecrets.psd1` was edited. Restore it from the repo. |
+| Website returns 500 / compilation error | Make sure the ASP.NET feature installed: `Get-WindowsFeature Web-Asp-Net45`. |
 | `KRB_AP_ERR_SKEW` from Kali | Sync the clock (see §7). |
-| Kerberoast returns `$krb5tgs$18$` (AES) instead of `$23$` | Crack with `hashcat -m 19700`. It still cracks, just slower. Or re-run `DC01-2-Configure.ps1`, which forces RC4 on the legacy service accounts. |
-| MS02 `local.txt` ended up in `C:\Users\Public\Desktop` | The script couldn't pre-create svc_tusk's profile. The lab still works, and the flag's ACL still restricts it to svc_tusk. |
+| Warning: `local.txt was written to the fallback location` | The lab still works. That flag is in `C:\Users\Public\Desktop\` instead of the user's own Desktop, and its permissions are unchanged. |
+| Something in the attack path doesn't behave as expected | See *Troubleshooting the intended path* at the end of [ANSWER-KEY.md](ANSWER-KEY.md) (spoilers). |

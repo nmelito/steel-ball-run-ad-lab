@@ -46,6 +46,7 @@ To practice for the real thing, hold yourself to OSCP-style restrictions:
 2. **No automated exploitation frameworks** (Metasploit, sqlmap's `--os-shell`, etc.), except Metasploit on **one** machine if you choose. `msfvenom` and `multi/handler` are fine.
 3. **No AI assistants or walkthroughs** while the clock runs. [HINTS.md](HINTS.md) costs you 2 points per hint opened, if you're scoring yourself.
 4. **Do not modify the setup scripts or VMs from the hypervisor side.**
+5. **Honor system:** don't read the setup scripts, `LabSecrets.psd1` or the answer key. If you stumble on a `C:\LabSetup` folder in the lab, it's leftover setup material and not part of the challenge. Leave it alone.
 5. Document as you go. A real engagement ends in a report.
 
 ## Deliverable

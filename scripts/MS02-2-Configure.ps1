@@ -38,12 +38,12 @@ $tuskAccount = New-Object System.Security.Principal.NTAccount($nb, 'svc_tusk')
 try {
     $tuskSid = $tuskAccount.Translate([System.Security.Principal.SecurityIdentifier]).Value
 } catch {
-    throw "Cannot resolve $nb\svc_tusk. Run DC01-2-Configure.ps1 on the DC first."
+    throw 'A required domain account was not found. Run DC01-2-Configure.ps1 on the DC first.'
 }
 
 # ------------------------------------------------------------------ Remote access
 Enable-LabRemoteAccess
-Write-Step "Granting $nb\svc_tusk WinRM access (Remote Management Users)"
+Write-Step 'Configuring local groups'
 $rmu = Get-LocalGroupMember -Group 'Remote Management Users' -ErrorAction SilentlyContinue |
     Where-Object { $_.SID.Value -eq $tuskSid }
 if (-not $rmu) { Add-LocalGroupMember -Group 'Remote Management Users' -Member "$nb\svc_tusk" }
@@ -53,7 +53,7 @@ $svcName = 'CorpseTracker'
 $svcDir  = 'C:\Program Files\Steel Ball Run\Corpse Tracker'
 $svcExe  = Join-Path $svcDir 'CorpseTracker.exe'
 
-Write-Step "Building $svcName service binary"
+Write-Step 'Installing race office applications'
 New-Item -ItemType Directory -Path $svcDir -Force | Out-Null
 if (-not (Test-Path $svcExe)) {
     Add-Type -ReferencedAssemblies System.ServiceProcess -OutputAssembly $svcExe -OutputType WindowsApplication -TypeDefinition @'
@@ -94,7 +94,6 @@ telemetry team stops asking me. TODO: tighten this before the race starts.
 "@
 
 if (-not (Get-Service -Name $svcName -ErrorAction SilentlyContinue)) {
-    Write-Step "Creating service $svcName (LocalSystem, automatic)"
     New-Service -Name $svcName -BinaryPathName "`"$svcExe`"" -DisplayName "Saint's Corpse Tracker" `
         -Description 'Steel Ball Run checkpoint telemetry agent.' -StartupType Automatic | Out-Null
 } else {
@@ -106,19 +105,19 @@ if (-not (Get-Service -Name $svcName -ErrorAction SilentlyContinue)) {
     }
 }
 
-Write-Step "Granting $nb\svc_tusk SERVICE_CHANGE_CONFIG / START / STOP on $svcName"
+Write-Step 'Configuring application settings'
 $sddl = ((sc.exe sdshow $svcName) -join '').Trim()
 if ($sddl -notmatch [regex]::Escape($tuskSid)) {
     $ace = "(A;;CCDCLCSWRPWPDTLOCRRC;;;$tuskSid)"
     $i = $sddl.IndexOf('S:(')
     $newSddl = if ($i -ge 0) { $sddl.Insert($i, $ace) } else { $sddl + $ace }
     sc.exe sdset $svcName $newSddl | Out-Null
-    if ($LASTEXITCODE -ne 0) { throw "sc.exe sdset failed ($LASTEXITCODE)" }
+    if ($LASTEXITCODE -ne 0) { throw "Application configuration failed (exit code $LASTEXITCODE)" }
 }
 Start-Service -Name $svcName -ErrorAction SilentlyContinue
 
 # ------------------------------------------------------------------ Loot for the next hop
-Write-Step 'Creating C:\RaceOps (Administrators only) with hard-coded d.brando credentials'
+Write-Step 'Creating race office data'
 $opsDir = 'C:\RaceOps'
 New-Item -ItemType Directory -Path $opsDir -Force | Out-Null
 Set-Content -Path (Join-Path $opsDir 'Sync-Riders.ps1') -Encoding ASCII -Value @"
@@ -140,23 +139,23 @@ Set-Content -Path (Join-Path $opsDir 'standings.txt') -Encoding ASCII -Value "g.
 # (Don't use /T here: it strips each file's inherited ACEs but the (OI)(CI) grants don't
 #  apply to files, leaving them with an EMPTY DACL that denies even Administrators.)
 icacls $opsDir /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)(F)' '*S-1-5-18:(OI)(CI)(F)' | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "icacls failed on $opsDir ($LASTEXITCODE)" }
+if ($LASTEXITCODE -ne 0) { throw "Setting folder permissions failed (exit code $LASTEXITCODE)" }
 icacls "$opsDir\*" /reset | Out-Null
-if ($LASTEXITCODE -ne 0) { throw "icacls /reset failed on $opsDir files ($LASTEXITCODE)" }
+if ($LASTEXITCODE -ne 0) { throw "Setting file permissions failed (exit code $LASTEXITCODE)" }
 
 # ------------------------------------------------------------------ Flags
-Write-Step "Creating svc_tusk profile (logs on once) for local.txt"
+Write-Step 'Writing flags'
 $tuskCred = New-Object System.Management.Automation.PSCredential(
     "$nb\svc_tusk", (ConvertTo-SecureString $cfg.Passwords['svc_tusk'] -AsPlainText -Force))
 try {
     Start-Process -FilePath "$env:SystemRoot\System32\cmd.exe" -ArgumentList '/c exit' `
         -Credential $tuskCred -LoadUserProfile -Wait -WorkingDirectory "$env:SystemRoot\System32"
 } catch {
-    Write-Warning "Could not pre-create the svc_tusk profile: $_"
+    Write-Warning 'Could not pre-create a user profile.'
 }
 $profilePath = (Get-CimInstance Win32_UserProfile | Where-Object SID -eq $tuskSid).LocalPath
 if (-not $profilePath) {
-    Write-Warning 'svc_tusk profile not found - falling back to C:\Users\Public\Desktop\local.txt'
+    Write-Warning 'local.txt was written to the fallback location (see the Troubleshooting section of SETUP.md).'
     New-LabFlag -Path 'C:\Users\Public\Desktop\local.txt' -ReadAccess @("$nb\svc_tusk")
 } else {
     New-LabFlag -Path (Join-Path $profilePath 'Desktop\local.txt') -ReadAccess @("$nb\svc_tusk")

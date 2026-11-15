@@ -23,9 +23,16 @@ function Assert-Admin {
 }
 
 function Get-LabConfig {
-    $path = Join-Path $PSScriptRoot 'LabConfig.psd1'
-    if (-not (Test-Path $path)) { throw "LabConfig.psd1 not found next to the script ($path)." }
-    Import-PowerShellDataFile -Path $path
+    # LabConfig.psd1  = network settings (safe to open and edit)
+    # LabSecrets.psd1 = account passwords (SPOILERS - never needs to be opened)
+    $path        = Join-Path $PSScriptRoot 'LabConfig.psd1'
+    $secretsPath = Join-Path $PSScriptRoot 'LabSecrets.psd1'
+    foreach ($p in $path, $secretsPath) {
+        if (-not (Test-Path $p)) { throw "$(Split-Path $p -Leaf) not found next to the script. Copy the whole scripts folder." }
+    }
+    $cfg = Import-PowerShellDataFile -Path $path
+    $cfg.Passwords = (Import-PowerShellDataFile -Path $secretsPath).Passwords
+    return $cfg
 }
 
 function Get-LabAdapter {
@@ -99,7 +106,6 @@ function New-LabFlag {
     Set-Content -Path $Path -Value $flag -NoNewline -Encoding ASCII
     icacls $Path /inheritance:r /grant:r '*S-1-5-32-544:(F)' '*S-1-5-18:(F)' | Out-Null
     foreach ($p in $ReadAccess) { icacls $Path /grant "${p}:(R)" | Out-Null }
-    Write-Done "Flag written: $Path"
 }
 
 function Clear-LabHistory {

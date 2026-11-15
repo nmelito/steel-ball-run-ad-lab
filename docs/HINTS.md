@@ -50,6 +50,11 @@ One service account's password is in `rockyou.txt`. The other's isn't. BloodHoun
 The potato trick won't work here. Look at what's installed under `C:\Program Files\`, and read every README.
 </details>
 
+<details><summary>Hint 8½: Why is winPEAS quiet?</summary>
+
+Your WinRM session is a *network* logon, and those can't ask Windows for the list of services. Tools that rely on that list will miss things. You can still query a service **by name**, and the registry (`HKLM\SYSTEM\CurrentControlSet\Services`) can be read by anyone.
+</details>
+
 <details><summary>Hint 9: Privilege escalation</summary>
 
 `sc.exe sdshow <service>`. Find your own SID with `whoami /user`. What rights does your SID have on the service? (`DC` = SERVICE_CHANGE_CONFIG.)

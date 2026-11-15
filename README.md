@@ -34,7 +34,10 @@ flowchart LR
 
 ## Skills Practiced
 
-The exact chain is in the [answer key](docs/ANSWER-KEY.md). These are the techniques it covers:
+Web application exploitation, Windows privilege escalation, credential harvesting, Kerberos attacks, lateral movement and Active Directory privilege escalation, chained the way a real internal engagement unfolds.
+
+<details>
+<summary><b>Technique list with MITRE ATT&CK mapping</b> (⚠️ spoilers: this is the attack path in order)</summary>
 
 | Phase | Technique | MITRE ATT&CK |
 |-------|-----------|--------------|
@@ -49,7 +52,19 @@ The exact chain is in the [answer key](docs/ANSWER-KEY.md). These are the techni
 | Domain escalation | DCSync | T1003.006 |
 | Lateral movement | Pass-the-Hash | T1550.002 |
 
-It also includes a few red herrings, such as an AS-REP-roastable account, a second roastable SPN and a disabled account. Not everything that looks juicy is the way forward.
+It also includes a few red herrings, such as an AS-REP-roastable account, a second roastable SPN and a disabled account. Not everything that looks juicy is the way forward. The full walkthrough is in the [answer key](docs/ANSWER-KEY.md).
+
+</details>
+
+## Honor System
+
+This is a self-training lab, and the person who builds it usually plays it. Building it is **spoiler-free**: the scripts print only generic progress messages, and [SETUP.md](docs/SETUP.md) never describes the vulnerabilities. Some files do contain the solution, though. If you're going to play, don't open:
+
+- `scripts/LabSecrets.psd1`, the `.ps1` scripts and `scripts/web/`;
+- `C:\LabSetup` on the VMs (it's deleted automatically unless you keep it for testing);
+- [ANSWER-KEY.md](docs/ANSWER-KEY.md), and [HINTS.md](docs/HINTS.md) except when you're stuck.
+
+If you peek, the only person you cheat is yourself.
 
 ## Repository Layout
 
@@ -62,20 +77,21 @@ steel-ball-run-ad-lab/
 │   ├── HINTS.md                 ← progressive, spoiler-tagged hints
 │   └── ANSWER-KEY.md            ← full walkthrough (spoilers!)
 └── scripts/
-    ├── LabConfig.psd1           ← IPs, names, passwords (edit network here)
+    ├── LabConfig.psd1           ← network settings (the only file you edit; spoiler-free)
+    ├── LabSecrets.psd1          ← account passwords (⚠️ spoilers, never needs opening)
     ├── LabCommon.ps1            ← shared helpers
     ├── DC01-1-Promote.ps1       ← DC: IP, rename, promote forest
-    ├── DC01-2-Configure.ps1     ← DC: users, groups, SPNs, ACLs, flag
+    ├── DC01-2-Configure.ps1     ← DC: populate the domain
     ├── Member-1-JoinDomain.ps1  ← MS01/MS02: IP, rename, domain join
-    ├── MS01-2-Configure.ps1     ← SANDIEGO: IIS app, autologon, flags
-    ├── MS02-2-Configure.ps1     ← MONUMENTVALLEY: service, WinRM, flags
-    └── web/                     ← race registration website (deployed to MS01)
+    ├── MS01-2-Configure.ps1     ← SANDIEGO configuration
+    ├── MS02-2-Configure.ps1     ← MONUMENTVALLEY configuration
+    └── web/                     ← race office website (deployed to MS01)
 ```
 
 ## Quick Start
 
 1. Create three Windows Server 2022 VMs ([free evaluation ISO](https://www.microsoft.com/en-us/evalcenter/download-windows-server-2022)) and one [Kali](https://www.kali.org/get-kali/) VM on the same host-only network.
-2. Copy the `scripts/` folder to `C:\LabSetup` on each Windows VM.
+2. Copy the whole `scripts/` folder to `C:\LabSetup` on each Windows VM. Only open `LabConfig.psd1`, and only if you need to change the network.
 3. Run the scripts in order:
 
 | Step | VM | Command (elevated PowerShell) |
@@ -87,7 +103,7 @@ steel-ball-run-ad-lab/
 | 5 | MS01 | `.\MS01-2-Configure.ps1` |
 | 6 | MS02 | `.\MS02-2-Configure.ps1` |
 
-4. Each `*-2-Configure.ps1` script **deletes `C:\LabSetup` (it holds every password) and reboots** when it finishes. Use `-KeepSetupFiles` while testing. On MS01/MS02, only ever log on as the **local** `.\Administrator` ([why](docs/SETUP.md#credential-hygiene)). Then snapshot all VMs.
+4. Each `*-2-Configure.ps1` script **deletes `C:\LabSetup` (it holds the solution) and reboots** when it finishes. Use `-KeepSetupFiles` while testing, under the [honor system](#honor-system). On MS01/MS02, only ever log on as the **local** `.\Administrator` ([why](docs/SETUP.md#credential-hygiene)). Then snapshot all VMs.
 5. Read [SCENARIO.md](docs/SCENARIO.md) and start hacking from Kali.
 
 The full instructions, including VM sizing, hypervisor networking and troubleshooting, are in **[docs/SETUP.md](docs/SETUP.md)**.
