@@ -8,7 +8,12 @@
     Safe to re-run (idempotent): existing objects are updated, not duplicated.
 #>
 [CmdletBinding()]
-param()
+param(
+    # Keep C:\LabSetup (for re-running while testing). Default: delete it - it contains every password.
+    [switch]$KeepSetupFiles,
+    # Skip the final reboot (which clears setup-time credentials from memory).
+    [switch]$NoReboot
+)
 
 . "$PSScriptRoot\LabCommon.ps1"
 Assert-Admin
@@ -171,6 +176,4 @@ Add-LabAce -TargetDN $domainDN                    -Sid $officials.SID -Rights Wr
 Write-Step 'Writing DC proof flag'
 New-LabFlag -Path 'C:\Users\Administrator\Desktop\proof.txt'
 
-Clear-LabHistory
-Write-Done 'DC01 configuration complete. Join MS01 and MS02 to the domain next.'
-Write-CleanupReminder
+Complete-LabSetup -Message 'DC01 configuration complete. Join MS01 and MS02 to the domain next.' -KeepSetupFiles:$KeepSetupFiles -NoReboot:$NoReboot

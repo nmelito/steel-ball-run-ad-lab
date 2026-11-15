@@ -84,10 +84,10 @@ steel-ball-run-ad-lab/
 | 2 | DC01 | `.\DC01-2-Configure.ps1` |
 | 3 | MS01 | `.\Member-1-JoinDomain.ps1 -Role MS01` |
 | 4 | MS02 | `.\Member-1-JoinDomain.ps1 -Role MS02` |
-| 5 | MS01 | `.\MS01-2-Configure.ps1`, then reboot |
+| 5 | MS01 | `.\MS01-2-Configure.ps1` |
 | 6 | MS02 | `.\MS02-2-Configure.ps1` |
 
-4. Delete `C:\LabSetup` from every VM, since it contains the passwords. Then snapshot all VMs.
+4. Each `*-2-Configure.ps1` script **deletes `C:\LabSetup` (it holds every password) and reboots** when it finishes. Use `-KeepSetupFiles` while testing. On MS01/MS02, only ever log on as the **local** `.\Administrator` ([why](docs/SETUP.md#credential-hygiene)). Then snapshot all VMs.
 5. Read [SCENARIO.md](docs/SCENARIO.md) and start hacking from Kali.
 
 The full instructions, including VM sizing, hypervisor networking and troubleshooting, are in **[docs/SETUP.md](docs/SETUP.md)**.

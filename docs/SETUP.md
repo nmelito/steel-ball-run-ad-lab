@@ -90,7 +90,7 @@ Set-ExecutionPolicy -Scope Process Bypass -Force
 .\DC01-2-Configure.ps1
 ```
 
-This creates the OUs, groups, users, SPNs, the ACL chain, the red herrings and `proof.txt`.
+This creates the OUs, groups, users, SPNs, the ACL chain, the red herrings and `proof.txt`. It then **deletes `C:\LabSetup` and reboots** (see the note in §6 about `-KeepSetupFiles`).
 
 ---
 
@@ -114,14 +114,13 @@ Each script sets its static IP, points DNS at the DC and removes Defender. It th
 
 ## 6. Configure the member servers
 
-After the reboot, log in as the **local** Administrator, not the domain one. At the login screen choose *Other user* and type `.\Administrator`.
+After the reboot, log in as the **local** Administrator, not the domain one. At the login screen choose *Other user* and type `.\Administrator`. The member scripts **refuse to run under a domain account**; see [Credential hygiene](#credential-hygiene) for why.
 
 **MS01 (`SANDIEGO`):**
 
 ```powershell
 cd C:\LabSetup; Set-ExecutionPolicy -Scope Process Bypass -Force
 .\MS01-2-Configure.ps1
-Restart-Computer
 ```
 This deploys the IIS race site and configures autologon for `SBR\g.zeppeli`. After the reboot, Gyro logs on at the console automatically. That is expected, and it's part of the lab.
 
@@ -133,7 +132,15 @@ cd C:\LabSetup; Set-ExecutionPolicy -Scope Process Bypass -Force
 ```
 This creates the `CorpseTracker` service, grants WinRM access, creates `C:\RaceOps` and writes the flags.
 
-> All `*-2-Configure.ps1` scripts are **idempotent**: you can re-run them safely. Each run regenerates the flags.
+**Automatic cleanup.** Each `*-2-Configure.ps1` script finishes by **deleting `C:\LabSetup`**, which holds every password, and then **rebooting**, which clears any setup-time credentials from memory. You don't need to delete anything by hand. If something has a file in the folder open, the deletion is scheduled to run as SYSTEM at the next boot instead.
+
+| Switch | Use it when |
+|--------|-------------|
+| `-KeepSetupFiles` | You're still testing and want to re-run scripts. Run once more without it, or delete the folder as `.\Administrator`, before you play. |
+| `-NoReboot` | You want to reboot yourself later. Do reboot before you snapshot. |
+| `-AllowDomainAccount` | (MS01/MS02 only) Not recommended. It overrides the local-admin check. |
+
+> All `*-2-Configure.ps1` scripts are **idempotent**: you can re-run them safely, if the files are still there. Each run regenerates the flags.
 
 ---
 
@@ -172,12 +179,36 @@ grep -cx valkyrie /usr/share/wordlists/rockyou.txt   # should print 1 (or more)
 
 ## 8. Clean up & snapshot
 
-1. On **every** Windows VM, delete the setup folder, because it contains every password:
+1. Check that `C:\LabSetup` is gone on every Windows VM. The configure scripts delete it unless you used `-KeepSetupFiles`. If it's still there, delete it as **`.\Administrator`** on member servers. Never use a domain account for this; see below.
    ```powershell
    Remove-Item C:\LabSetup -Recurse -Force
    ```
-2. Shut the VMs down and take a snapshot named **`clean`** of each one.
-3. Revert to `clean` whenever you want a fresh attempt. Reverting the DC and members **together** keeps machine-account passwords in sync.
+2. **Don't log on to MS01/MS02 again** after their final reboot. MS01 shows Gyro's autologon desktop; leave it.
+3. Shut the VMs down and take a snapshot named **`clean`** of each one.
+4. Revert to `clean` whenever you want a fresh attempt. Reverting the DC and members **together** keeps machine-account passwords in sync.
+
+### Credential hygiene
+
+Players get SYSTEM on both member servers, and anything Windows remembers there is theirs. A domain admin logon or elevation on MS01/MS02 leaves two traces:
+
+| What | Where | How long | What players get |
+|------|-------|----------|------------------|
+| NT hash (and Kerberos tickets) | LSASS memory | Until reboot | Instant Domain Admin through pass-the-hash, skipping MS02 and the ACL chain |
+| Cached logon (DCC2 / mscache) | `HKLM\SECURITY\Cache` | **Permanent**, survives reboots | Offline cracking of the DA password, if it's weak |
+
+Domain admin logons include all of these: logging on as `SBR\Administrator`, typing DA credentials into a **UAC prompt**, `runas`, RDP, or mapping a drive with DA credentials.
+
+**Rules for building the lab:**
+- On MS01/MS02, only ever log on as the **local** `.\Administrator`. The member configure scripts enforce this.
+- The only place domain admin credentials touch a member is the `Get-Credential` prompt in `Member-1-JoinDomain.ps1`. That's a network authentication for the join, not a logon, and the server reboots right after.
+- Give `SBR\Administrator` a **strong, unique password** that isn't in any wordlist, so a leaked cached hash can't be cracked.
+
+**Already leaked a domain admin logon on a member?** Check from Kali once you have SYSTEM: `secretsdump` shows `Dumping cached domain logon information` with an `SBR/Administrator` entry. Then do either of these:
+- **Easiest:** revert to a snapshot from before the logon, or rebuild that member.
+- **In place:**
+  1. Change the `SBR\Administrator` password on the DC to a strong new one, which makes the leaked hash and cached entry useless.
+  2. Reboot the member to flush LSASS.
+  3. Then take your `clean` snapshot.
 
 > Evaluation editions run for 180 days. Running `slmgr /rearm` resets the timer a few times. Reverting snapshots also restores the clock-based activation state.
 

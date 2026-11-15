@@ -110,11 +110,64 @@ function Clear-LabHistory {
     } catch { }
 }
 
-function Write-CleanupReminder {
-    Write-Host ''
-    Write-Host '=====================================================================' -ForegroundColor Yellow
-    Write-Host ' Setup scripts contain every lab password. When the lab is finished:' -ForegroundColor Yellow
-    Write-Host '   Remove-Item C:\LabSetup -Recurse -Force' -ForegroundColor Yellow
-    Write-Host ' then take a clean snapshot of this VM.' -ForegroundColor Yellow
-    Write-Host '=====================================================================' -ForegroundColor Yellow
+function Assert-LocalAdminSession {
+    # On member servers, any domain-account logon/elevation leaves credentials in LSASS
+    # (and a cached DCC2 hash in the registry) that players can dump with mimikatz -
+    # an unintended shortcut. Member configuration must run as the LOCAL Administrator.
+    param([switch]$AllowDomainAccount)
+    if ($env:USERDOMAIN -ieq $env:COMPUTERNAME) { return }
+    $msg = "You are running as a DOMAIN account ($env:USERDOMAIN\$env:USERNAME). Its credentials will be " +
+           "dumpable from this server and give players a shortcut to Domain Admin. Sign out, log on as " +
+           ".\Administrator (local) and run the script again."
+    if ($AllowDomainAccount) { Write-Warning $msg } else { throw $msg }
+}
+
+function Remove-LabSetupFiles {
+    # Deletes the folder these scripts live in (normally C:\LabSetup). It holds every
+    # lab password, so it must not survive into the playable lab.
+    $dir = (Resolve-Path $PSScriptRoot).Path.TrimEnd('\')
+    $looksLikeLabFolder = (Test-Path (Join-Path $dir 'LabConfig.psd1')) -and (Test-Path (Join-Path $dir 'LabCommon.ps1'))
+    $isProtected = $dir.Length -le 3 -or $dir -ieq $env:USERPROFILE -or $dir -ieq $env:SystemRoot -or
+                   $dir -ieq $env:ProgramFiles -or $dir -ieq (Join-Path $env:SystemDrive 'Users')
+    if (-not $looksLikeLabFolder -or $isProtected) {
+        Write-Warning "Not deleting '$dir' automatically (doesn't look like a dedicated lab folder). Delete the lab scripts manually as the local Administrator."
+        return
+    }
+
+    Write-Step "Deleting setup files in $dir"
+    Set-Location -Path "$env:SystemDrive\"
+    [Environment]::CurrentDirectory = "$env:SystemDrive\"
+    try {
+        Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction Stop
+        Write-Done 'Setup files deleted'
+    } catch {
+        # Something holds a handle (e.g. an Explorer window). Delete at next boot as SYSTEM instead.
+        Write-Warning "Could not delete now ($($_.Exception.Message)). Scheduling deletion at next boot."
+        $action  = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument "/c rd /s /q `"$dir`" & schtasks /delete /tn LabSetupCleanup /f"
+        $trigger = New-ScheduledTaskTrigger -AtStartup
+        Register-ScheduledTask -TaskName 'LabSetupCleanup' -Action $action -Trigger $trigger `
+            -User 'NT AUTHORITY\SYSTEM' -RunLevel Highest -Force | Out-Null
+    }
+}
+
+function Complete-LabSetup {
+    # Final step of every *-2-Configure.ps1: clear history, delete the setup files,
+    # and reboot so no setup-time credentials remain in memory.
+    param([string]$Message, [switch]$KeepSetupFiles, [switch]$NoReboot)
+    Clear-LabHistory
+    Write-Done $Message
+
+    if ($KeepSetupFiles) {
+        Write-Warning "-KeepSetupFiles: $PSScriptRoot still contains every lab password. Re-run without -KeepSetupFiles (or delete it as the local Administrator) before snapshotting or playing."
+    } else {
+        Remove-LabSetupFiles
+    }
+
+    if ($NoReboot) {
+        Write-Warning '-NoReboot: reboot before snapshotting/playing so no setup credentials remain in memory.'
+        return
+    }
+    Write-Step 'Rebooting in 15 seconds to clear setup credentials from memory (Ctrl+C to cancel)'
+    Start-Sleep -Seconds 15
+    Restart-Computer -Force
 }

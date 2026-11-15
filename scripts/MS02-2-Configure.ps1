@@ -14,10 +14,18 @@
       * C:\RaceOps\Sync-Riders.ps1 (Administrators only) hard-codes SBR\d.brando's password.
 #>
 [CmdletBinding()]
-param()
+param(
+    # Keep C:\LabSetup (for re-running while testing). Default: delete it - it contains every password.
+    [switch]$KeepSetupFiles,
+    # Skip the final reboot (which clears setup-time credentials from memory).
+    [switch]$NoReboot,
+    # Allow running as a domain account (NOT recommended: its creds become dumpable).
+    [switch]$AllowDomainAccount
+)
 
 . "$PSScriptRoot\LabCommon.ps1"
 Assert-Admin
+Assert-LocalAdminSession -AllowDomainAccount:$AllowDomainAccount
 $cfg  = Get-LabConfig
 $node = $cfg.Nodes.MS02
 $nb   = $cfg.NetBIOSName
@@ -155,6 +163,4 @@ if (-not $profilePath) {
 }
 New-LabFlag -Path 'C:\Users\Administrator\Desktop\proof.txt'
 
-Clear-LabHistory
-Write-Done 'MS02 configuration complete.'
-Write-CleanupReminder
+Complete-LabSetup -Message 'MS02 configuration complete.' -KeepSetupFiles:$KeepSetupFiles -NoReboot:$NoReboot
