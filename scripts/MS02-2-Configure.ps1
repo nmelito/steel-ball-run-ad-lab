@@ -128,7 +128,13 @@ Set-Content -Path (Join-Path $opsDir 'Sync-Riders.ps1') -Encoding ASCII -Value @
 `$standings | Out-File C:\RaceOps\standings.txt
 "@
 Set-Content -Path (Join-Path $opsDir 'standings.txt') -Encoding ASCII -Value "g.zeppeli`r`nj.joestar`r`nd.brando`r`np.loco`r`ns.man"
-icacls $opsDir /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)(F)' '*S-1-5-18:(OI)(CI)(F)' /T | Out-Null
+# Lock the folder to Administrators/SYSTEM, then make the files inherit from it.
+# (Don't use /T here: it strips each file's inherited ACEs but the (OI)(CI) grants don't
+#  apply to files, leaving them with an EMPTY DACL that denies even Administrators.)
+icacls $opsDir /inheritance:r /grant:r '*S-1-5-32-544:(OI)(CI)(F)' '*S-1-5-18:(OI)(CI)(F)' | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "icacls failed on $opsDir ($LASTEXITCODE)" }
+icacls "$opsDir\*" /reset | Out-Null
+if ($LASTEXITCODE -ne 0) { throw "icacls /reset failed on $opsDir files ($LASTEXITCODE)" }
 
 # ------------------------------------------------------------------ Flags
 Write-Step "Creating svc_tusk profile (logs on once) for local.txt"
