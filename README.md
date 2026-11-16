@@ -115,6 +115,10 @@ The full instructions, including VM sizing, hypervisor networking and troublesho
 - **[HINTS.md](docs/HINTS.md)**: nudges when you're stuck.
 - **[ANSWER-KEY.md](docs/ANSWER-KEY.md)**: the complete attack path with commands. ⚠️ Spoilers.
 
+## License
+
+The scripts, website and documentation in this repository are released under the [MIT License](LICENSE). The license covers this project's own content only. Windows Server, third-party tools and the *Steel Ball Run* characters and names belong to their respective owners.
+
 ## Disclaimer
 
 This project is for **education and authorized testing only**. The techniques here must only be used against systems you own or are explicitly authorized to test. The author is not responsible for misuse.
